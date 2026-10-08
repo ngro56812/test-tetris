@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>テストテトリス</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#171524;color:#faf7ff;font-family:system-ui,sans-serif}main{max-width:760px;margin:auto;padding:24px 16px}h1{margin:0;font-size:30px}header p{color:#b9b3cb;margin:8px 0 24px}.game{display:flex;gap:22px;justify-content:center;align-items:flex-start}.board{position:relative;width:min(62vw,300px)}canvas{display:block;width:100%;background:#100e1a;border:1px solid #49415e;border-radius:8px}#overlay{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;background:#100e1adc;border-radius:8px;padding:16px}#overlay[hidden]{display:none}#overlay strong{font-size:24px}#overlay p{color:#d1c8e0}aside{width:150px}.stat{background:#252035;border-radius:12px;padding:14px;margin-bottom:12px}.stat span{display:block;font-size:12px;color:#b9b3cb}.stat strong{font-size:26px}#next{border:0;width:100px;height:100px;margin:auto}button{border:0;border-radius:10px;background:#dca6ff;color:#21132e;font:700 14px system-ui;padding:12px;cursor:pointer;touch-action:manipulation}button:hover{background:#e9c5ff}button:focus-visible{outline:3px solid #fff;outline-offset:3px}aside button{width:100%;margin-bottom:10px}.controls{display:flex;justify-content:center;gap:8px;margin-top:16px}.controls button{min-width:48px;background:#39304c;color:white;font-size:18px;touch-action:none}.help{font-size:13px;color:#b9b3cb;line-height:1.9;text-align:center}footer{text-align:center;font-size:11px;color:#81778f;margin-top:24px}@media(max-width:440px){main{padding:18px 12px}.game{gap:12px}aside{width:110px}.stat{padding:10px}h1{font-size:26px}.controls{gap:5px}.controls button{min-width:43px;padding:10px}}
+</style></head>
+<body><main><header><h1>テストテトリス</h1><p>ひと息ついて、ブロックをそろえよう。</p></header>
+<div class="game"><div class="board"><canvas id="board" width="300" height="600" aria-label="10列20行のゲーム盤"></canvas><div id="overlay"><strong id="message">準備はいい？</strong><p id="detail">横一列をそろえてスコアアップ！</p><button id="start">ゲームを始める</button></div></div>
+<aside><div class="stat"><span>SCORE</span><strong id="score">0</strong></div><div class="stat"><span>LINES</span><strong id="lines">0</strong></div><div class="stat"><span>LEVEL</span><strong id="level">1</strong></div><div class="stat"><span>NEXT</span><canvas id="next" width="120" height="120" aria-label="次のブロック"></canvas></div><button id="pause">一時停止</button><button id="restart">やり直す</button></aside></div>
+<div class="controls" aria-label="タッチ操作"><button data-action="left" aria-label="左に移動">←</button><button data-action="rotate" aria-label="回転">↻</button><button data-action="right" aria-label="右に移動">→</button><button data-action="down" aria-label="下に移動">↓</button><button data-action="drop" aria-label="一気に落とす">⤓</button></div>
+<p class="help">← →：移動 ／ ↑：回転 ／ ↓：落下<br>スペース：一気に落とす ／ P：一時停止<br>スマホでは画面下のボタンで操作できます。</p><footer>非公式の学習用ブロックゲーム</footer></main>
+<script>
+'use strict';
+const W=10,H=20,S=30;
+const shapes=[[[1,1,1,1]],[[2,2],[2,2]],[[0,3,0],[3,3,3]],[[0,4,4],[4,4,0]],[[5,5,0],[0,5,5]],[[6,0,0],[6,6,6]],[[0,0,7],[7,7,7]]];
+const colors=['','#63d9ee','#ffe287','#c59bff','#97e6ae','#ff91ad','#9eaaff','#ffc183'];
+const $=id=>document.getElementById(id),ctx=$('board').getContext('2d'),nc=$('next').getContext('2d');
+let board,piece,next,bag=[],score=0,lines=0,level=1,running=false,paused=false,over=false,last=0,elapsed=0;
+function matrix(){if(!bag.length)bag=[0,1,2,3,4,5,6].sort(()=>0);if(bag.length===7){for(let i=6;i>0;i--){const j=Math.floor(Math.random()*(i+1));[bag[i],bag[j]]=[bag[j],bag[i]];}}return shapes[bag.pop()].map(r=>r.slice());}
+function fits(m,x,y){return m.every((r,dy)=>r.every((v,dx)=>!v||(x+dx>=0&&x+dx<W&&y+dy<H&&(y+dy<0||!board[y+dy][x+dx]))));}
+function spawn(){piece={m:next,x:0,y:0};piece.x=Math.floor((W-piece.m[0].length)/2);next=matrix();if(!fits(piece.m,piece.x,piece.y)){over=true;running=false;show('ゲームオーバー','スコア '+score+' 点！','もう一度遊ぶ');}drawNext();}
+function show(title,detail,button){$('message').textContent=title;$('detail').textContent=detail;$('start').textContent=button;$('overlay').hidden=false;}
+function update(){ $('score').textContent=score;$('lines').textContent=lines;$('level').textContent=level; }
+function start(){board=Array.from({length:H},()=>Array(W).fill(0));bag=[];score=lines=0;level=1;running=true;paused=over=false;elapsed=0;last=performance.now();next=matrix();spawn();$('overlay').hidden=true;$('pause').textContent='一時停止';update();draw();}
+function lock(){for(let y=0;y<piece.m.length;y++)for(let x=0;x<piece.m[y].length;x++)if(piece.m[y][x])board[piece.y+y][piece.x+x]=piece.m[y][x];
+let cleared=0;for(let y=H-1;y>=0;y--)if(board[y].every(Boolean)){board.splice(y,1);board.unshift(Array(W).fill(0));cleared++;y++;}
+score+=([0,100,300,500,800][cleared]||0)*level;lines+=cleared;level=1+Math.floor(lines/10);update();spawn();elapsed=0;}
+function down(manual=false){if(fits(piece.m,piece.x,piece.y+1)){piece.y++;if(manual){score++;update();}}else lock();elapsed=0;}
+function rotate(){const m=piece.m[0].map((_,i)=>piece.m.map(r=>r[i]).reverse());for(const offset of [0,-1,1,-2,2])if(fits(m,piece.x+offset,piece.y)){piece.m=m;piece.x+=offset;break;}}
+function action(a){if(!running||paused)return;if(a==='left'||a==='right'){const x=piece.x+(a==='left'?-1:1);if(fits(piece.m,x,piece.y))piece.x=x;}if(a==='rotate')rotate();if(a==='down')down(true);if(a==='drop'){while(fits(piece.m,piece.x,piece.y+1)){piece.y++;score+=2;}lock();}draw();}
+function cell(c,x,y,v,size=S,ghost=false){c.fillStyle=ghost?'#393044':colors[v];c.fillRect(x*size+1,y*size+1,size-2,size-2);c.strokeStyle=ghost?'#80708f':'#ffffff55';c.strokeRect(x*size+2,y*size+2,size-4,size-4);}
+function paint(c,m,x,y,size,ghost=false){m.forEach((r,dy)=>r.forEach((v,dx)=>{if(v)cell(c,x+dx,y+dy,v,size,ghost);}));}
+function draw(){ctx.clearRect(0,0,300,600);ctx.strokeStyle='#ffffff09';for(let x=0;x<=W;x++){ctx.beginPath();ctx.moveTo(x*S,0);ctx.lineTo(x*S,600);ctx.stroke();}for(let y=0;y<=H;y++){ctx.beginPath();ctx.moveTo(0,y*S);ctx.lineTo(300,y*S);ctx.stroke();}if(board)paint(ctx,board,0,0,S);if(piece&&!over){let gy=piece.y;while(fits(piece.m,piece.x,gy+1))gy++;paint(ctx,piece.m,piece.x,gy,S,true);paint(ctx,piece.m,piece.x,piece.y,S);}}
+function drawNext(){nc.clearRect(0,0,120,120);paint(nc,next,(5-next[0].length)/2,(5-next.length)/2,24);}
+function pause(){if(!running)return;paused=!paused;elapsed=0;last=performance.now();$('pause').textContent=paused?'再開':'一時停止';if(paused)show('ひと休み','準備ができたら再開しよう。','再開');else $('overlay').hidden=true;}
+$('start').onclick=()=>paused?pause():start();$('restart').onclick=start;$('pause').onclick=pause;
+document.addEventListener('keydown',e=>{if(e.target.tagName==='BUTTON'&&(e.code==='Space'||e.code==='Enter'))return;const map={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'rotate',ArrowDown:'down',Space:'drop'};if(map[e.code]){e.preventDefault();action(map[e.code]);}if(e.code==='KeyP')pause();});
+let repeat=null;function stopRepeat(){clearInterval(repeat);repeat=null;}
+document.querySelectorAll('[data-action]').forEach(b=>{b.addEventListener('pointerdown',e=>{e.preventDefault();stopRepeat();b.setPointerCapture(e.pointerId);const a=b.dataset.action;action(a);if(['left','right','down'].includes(a))repeat=setInterval(()=>action(a),140);});b.addEventListener('pointerup',stopRepeat);b.addEventListener('pointercancel',stopRepeat);b.addEventListener('lostpointercapture',stopRepeat);b.addEventListener('click',e=>{if(e.detail===0)action(b.dataset.action);});});
+document.addEventListener('visibilitychange',()=>{stopRepeat();if(document.hidden&&running&&!paused)pause();});window.addEventListener('blur',stopRepeat);
+function tick(t){if(running&&!paused){elapsed+=Math.min(t-last,1000);if(elapsed>=Math.max(100,800-(level-1)*65)){down();draw();}}last=t;requestAnimationFrame(tick);}
+draw();requestAnimationFrame(tick);
+</script></body></html>
